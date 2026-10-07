@@ -11,7 +11,6 @@ public class Bot : MonoBehaviour
 
     Vector3 wanderTarget = Vector3.zero;
 
-    // Start is called before the first frame update
     void Start()
     {
         agent = this.GetComponent<NavMeshAgent>();
@@ -39,20 +38,22 @@ public class Bot : MonoBehaviour
         float relativeHeading = Vector3.Angle(this.transform.forward, this.transform.TransformVector(target.transform.forward));
         float toTarget = Vector3.Angle(this.transform.forward, this.transform.TransformVector(targetDir));
 
-        if ((toTarget > 90 && relativeHeading < 20) || ds.currentSpeed < 0.01f)
+        if ((toTarget > 90 && relativeHeading < 20) || (ds != null && ds.currentSpeed < 0.01f))
         {
             Seek(target.transform.position);
             return;
         }
 
-        float lookAhead = targetDir.magnitude / (agent.speed + ds.currentSpeed);
+        float speed = (ds != null) ? ds.currentSpeed : 0f;
+        float lookAhead = targetDir.magnitude / (agent.speed + speed);
         Seek(target.transform.position + target.transform.forward * lookAhead);
     }
 
     void Evade()
     {
         Vector3 targetDir = target.transform.position - this.transform.position;
-        float lookAhead = targetDir.magnitude / (agent.speed + ds.currentSpeed);
+        float speed = (ds != null) ? ds.currentSpeed : 0f;
+        float lookAhead = targetDir.magnitude / (agent.speed + speed);
         Flee(target.transform.position + target.transform.forward * lookAhead);
     }
 
@@ -75,10 +76,12 @@ public class Bot : MonoBehaviour
         Seek(targetWorld);
     }
 
-    void Hide()
+    void CleverHide()
     {
         float dist = Mathf.Infinity;
         Vector3 chosenSpot = Vector3.zero;
+        Vector3 chosenDir = Vector3.zero;
+        GameObject chosenGO = World.Instance.GetHidingSpots()[0];
 
         for (int i = 0; i < World.Instance.GetHidingSpots().Length; i++)
         {
@@ -88,16 +91,38 @@ public class Bot : MonoBehaviour
             if (Vector3.Distance(this.transform.position, hidePos) < dist)
             {
                 chosenSpot = hidePos;
+                chosenDir = hideDir;
+                chosenGO = World.Instance.GetHidingSpots()[i];
                 dist = Vector3.Distance(this.transform.position, hidePos);
             }
         }
 
-        Seek(chosenSpot);
+        Collider hideCol = chosenGO.GetComponent<Collider>();
+        Ray backRay = new Ray(chosenSpot, -chosenDir.normalized);
+        RaycastHit info;
+        float distance = 250.0f;
+        hideCol.Raycast(backRay, out info, distance);
+
+        Seek(info.point + chosenDir.normalized);
+    }
+
+    bool CanSeeTarget()
+    {
+        RaycastHit raycastInfo;
+        Vector3 rayToTarget = target.transform.position - this.transform.position;
+        if (Physics.Raycast(this.transform.position, rayToTarget, out raycastInfo))
+        {
+            if (raycastInfo.transform.gameObject.tag == "cop")
+                return true;
+        }
+
+        return false;
     }
 
     // Update is called once per frame
     void Update()
     {
-        Hide();
+        if (CanSeeTarget())
+            CleverHide();
     }
 }
