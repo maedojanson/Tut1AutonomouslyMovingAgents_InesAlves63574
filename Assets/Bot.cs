@@ -11,6 +11,9 @@ public class Bot : MonoBehaviour
 
     Vector3 wanderTarget = Vector3.zero;
 
+    bool coolDown = false;
+
+    // Start is called before the first frame update
     void Start()
     {
         agent = this.GetComponent<NavMeshAgent>();
@@ -103,14 +106,16 @@ public class Bot : MonoBehaviour
         float distance = 250.0f;
         hideCol.Raycast(backRay, out info, distance);
 
-        Seek(info.point + chosenDir.normalized);
+        Seek(info.point + chosenDir.normalized * 2);
     }
 
     bool CanSeeTarget()
     {
         RaycastHit raycastInfo;
         Vector3 rayToTarget = target.transform.position - this.transform.position;
-        if (Physics.Raycast(this.transform.position, rayToTarget, out raycastInfo))
+        float lookAngle = Vector3.Angle(this.transform.forward, rayToTarget);
+
+        if (lookAngle < 60 && Physics.Raycast(this.transform.position, rayToTarget, out raycastInfo))
         {
             if (raycastInfo.transform.gameObject.tag == "cop")
                 return true;
@@ -119,10 +124,37 @@ public class Bot : MonoBehaviour
         return false;
     }
 
+    bool CanSeeMe()
+    {
+        Vector3 rayToTarget = this.transform.position - target.transform.position;
+        float lookAngle = Vector3.Angle(target.transform.forward, rayToTarget);
+
+        if (lookAngle < 60)
+            return true;
+
+        return false;
+    }
+
+    void BehaviourCooldown()
+    {
+        coolDown = false;
+    }
+
     // Update is called once per frame
     void Update()
     {
-        if (CanSeeTarget())
-            CleverHide();
+        if (!coolDown)
+        {
+            if (CanSeeTarget() && CanSeeMe())
+            {
+                CleverHide();
+                coolDown = true;
+                Invoke("BehaviourCooldown", 5);
+            }
+            else
+            {
+                Pursue();
+            }
+        }
     }
 }
